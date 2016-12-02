@@ -193,14 +193,17 @@ function optimize_grad(searchPM,Q,list_sid)
     
     % run gradient-based optimization
     if ~searchPM.fast_mode
-        scoreF = argmax_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose);
+        %scoreF = argmax_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose);
+        scoreF = mcmc_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose);
     end
     
     % Check to make sure the object was properly updated
     if Q.has_relations
         scoreQ = scoreMP(Q,searchPM.lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+        fprintf(1,'updated score %d',scoreQ)
     else
         scoreQ = scoreMP_NoRel(Q,searchPM.lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+        fprintf(1,'updated score %d',scoreQ)
     end
     if ~searchPM.fast_mode
         assert( isinf(scoreF) || aeq(scoreF,scoreQ) );
@@ -265,5 +268,6 @@ function flip_direction(searchPM,Q,sid)
 % an optimize various features about that stroke
     UtilMP.flip_stroke(Q.S{sid});
     optimize_subids(searchPM,Q,sid);
-    optimize_grad(searchPM,Q,sid);
+    %optimize_grad(searchPM,Q,sid);
+    optimize_grad(searchPM,Q);
 end

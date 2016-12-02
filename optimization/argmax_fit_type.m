@@ -40,6 +40,11 @@ function [scoreF,score0] = argmax_fit_type(Minit,lib,list_sid,verbose)
     % Run the optimization
     %tic
     score0 = -fmin(theta0);   
+    if M.has_relations(list_sid)
+        fprintf(1,'has relations')
+    else
+        fprintf(1,'no relations')
+    end
     try
         thetaF = fmincon(fmin,theta0,[],[],[],[],lb,ub,[],options);
     catch

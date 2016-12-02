@@ -13,6 +13,8 @@
 %   G: structure to store output
 function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
 
+    pa = '../bpl-figs/'
+
     ps = defaultps;
     if ~exist('K','var') || isempty(K) 
        K = ps.K; 
@@ -42,26 +44,34 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
     if verbose
         sz = [500 500]; % figure size      
         h = figure;
+        set(h,'visible','off')
         pos = get(h,'Position');
         pos(3:4) = sz;
         set(h,'Position',pos);
-        nrow = ceil(sqrt(nl));        
+        nrow = ceil(sqrt(nl));
+        
         for i=1:nl
+          
+            
             subplot(nrow,nrow,i);
             vizMP(initMP{i},'motor');
+            
             lb = num2str(init_scores(i),4);
             if i==1, lb = ['initial score: ' lb]; end
             title(lb);
         end
         pause(0.1);
+        saveas(h,strcat(pa,'init_parse_full.png'));
         drawnow
     end
 
     % run search for each candidate
     finalMP = cell(nl,1);
     for i=1:nl
+        dir_n = strcat(pa,'pa_',int2str(i),'/')
+        mkdir(dir_n)
         fprintf(1,'\nOptimizing parse %d of %d\n',i,nl);
-        finalMP{i} = SearchForParse(initMP{i},lib,verbose,fast_mode);
+        finalMP{i} = SearchForParse(initMP{i},lib,verbose,fast_mode,dir_n);
     end
     final_scores = zeros(nl,1);
     for i=1:nl
@@ -89,6 +99,7 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
             title(lb);
         end
         pause(0.1);
+        saveas(h,strcat(pa,'final_parse.png'))
         drawnow
     end
         

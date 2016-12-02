@@ -21,6 +21,7 @@ function ll = argmax_relations(lib,M,all_R,stroke_num)
     end
     
     PM = M.parameters;
+    ncpt = lib.ncpt;
     ll = zeros(length(stroke_num),1);
     for indx=1:length(stroke_num)
         s = stroke_num(indx);
@@ -57,7 +58,9 @@ function ll = argmax_relations(lib,M,all_R,stroke_num)
                     list_R{i}.gpos = gpos;
                 case 'mid'
                     [~,eval_spot] = optimize_along_spline(crit_pos,list_R{i},M,lib);
+                    %[~,lb,ub] = bspline_gen_s(ncpt,1);
                     list_R{i}.eval_spot_type = [];
+                    %list_R{i}.eval_spot_type = lb + rand*(ub-lb);
                     list_R{i}.eval_spot_token = eval_spot;
                     llextra = CPD.score_relation_token_approx_marginalize(lib,eval_spot);
                                       

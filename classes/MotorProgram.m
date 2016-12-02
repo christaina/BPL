@@ -187,6 +187,26 @@ classdef MotorProgram < BetterHandle
             out = all(present);
         end
         
+        function out = has_eval_types(this,list_sid)
+        % check if all mid-relations have eval spot types
+            if ~exist('list_sid','var')
+               list_sid = 1:this.ns; 
+            end
+            has_all_spots = true;
+            for sid = list_sid
+                if strcmp(this.S{sid}.R.type,'mid')
+                    curr = ~isempty(this.S{sid}.R.eval_spot_type);
+                    if ~curr & has_all_spots
+                        has_all_spots = curr
+                    end
+                end
+            end            
+            %if ~(all(present) || all(~present))
+            %    error('all relations should be present or not');
+            %end            
+            out = has_all_spots;
+        end
+        
         % set all relations to the empty relation
         function clear_relations(this)
             for sid=1:this.ns

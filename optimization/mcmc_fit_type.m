@@ -1,4 +1,4 @@
-function [scoreF,score0] = mcmc_fit_type(Minit,lib,list_sid,verbose)
+function [scoreF,score0] = mcmc_fit_type(Minit,lib,list_sid,verbose,searchPM)
 % ARGMAX_FIT_TYPE... Fit a parse to an image, with type-level parameters
 % only
 %
@@ -11,14 +11,14 @@ function [scoreF,score0] = mcmc_fit_type(Minit,lib,list_sid,verbose)
 % Output:
 %  scoreF : final score
 %  score0 : initial score
-% 
+%
 
     ps = defaultps;
     nsamp = ps.mcmc.nsamp_type_chain;
     ncpt = lib.ncpt;
 
     if ~exist('list_sid','var')
-       list_sid = 1:M.ns; 
+       list_sid = 1:M.ns;
     end
     if ~exist('verbose','var')
        verbose = false;
@@ -57,15 +57,40 @@ function [scoreF,score0] = mcmc_fit_type(Minit,lib,list_sid,verbose)
     % initial score
     score0 = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
 
-    % run MCMC chain for tokens
+    % run Mode Hopping MCMC chain for tokens
     for is = 1:nsamp
-        mcmc_iter_token(MH,M,lib,list_sid);
-        samples{is} = M.copy();
-        curr_score = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
-        samples_score(is) = curr_score;
-        assert(~isinf(samples_score(is)));
+        u_1 = rand;
+        P_check_1 = 0.1;
+        u_2 = rand;
+        P_check_2 = 0.5;
+        if u_1 > P_check_1
+          % run one MCMC iteration
+          mcmc_iter_token(MH,M,lib,list_sid);
+          samples{is} = M.copy();
+          curr_score = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+          samples_score(is) = curr_score;
+          assert(~isinf(samples_score(is)));
+        else
+          if u_2 > 0.5
+            % try a flip
+            %Q,searchPM.lib,list_sid,searchPM.verbose
+            %Minit,lib,list_sid,verbose
+            MH.mh_eval_flip_token(list_sid,M,lib,searchPM,verbose);
+            samples{is} = M.copy();
+            curr_score = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+            samples_score(is) = curr_score;
+            assert(~isinf(samples_score(is)));
+	else
+            % try a move_split_merge
+            MH.mh_eval_split_merge_token(list_sid,M,lib,verbose);
+            samples{is} = M.copy();
+            curr_score = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+            samples_score(is) = curr_score;
+            assert(~isinf(samples_score(is)));
+          end
+        end
     end
-    
+
     [maxscore,idx] = max(samples_score);
     best_M = samples{idx};
     final_score = scoreMP(best_M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
@@ -92,7 +117,7 @@ end
 function minscore = myscore_HasRel(theta,M,lib,list_sid)
     Q = M.copy(); % we don't want to modify the shared MotoProgram base
     refill(theta,Q,list_sid);
-    ll = scoreMP(Q,lib,'strokes',list_sid,'type',true,'token',true,'stat',false,'image',true);    
+    ll = scoreMP(Q,lib,'strokes',list_sid,'type',true,'token',true,'stat',false,'image',true);
     minscore = -ll;
 end
 
@@ -103,6 +128,6 @@ function minscore = myscore_NoRel(theta,M,lib,list_sid,all_R)
     Q = M.copy(); % we don't want to modify the shared MotoProgram base
     refill(theta,Q,list_sid);
     argmax_relations(lib,Q,all_R,list_sid);
-    ll = scoreMP(Q,lib,'strokes',list_sid,'type',true,'token',true,'stat',false,'image',true); 
+    ll = scoreMP(Q,lib,'strokes',list_sid,'type',true,'token',true,'stat',false,'image',true);
     minscore = -ll;
 end

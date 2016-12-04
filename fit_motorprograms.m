@@ -3,12 +3,12 @@
 %
 % Input
 %   I: binary image, where true is "black" pixel
-%   K: number 
+%   K: number
 %   verbose: (true/false) report progress and visualize results?
-%   include_mcmc: (true/false) estimate local variance at type-level? 
+%   include_mcmc: (true/false) estimate local variance at type-level?
 %       (this is needed for exemplar generation and classification)
 %   fast_mode: (true/false)
-%   
+%
 % Output
 %   G: structure to store output
 function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
@@ -16,46 +16,46 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
     pa = '../bpl-figs/'
 
     ps = defaultps;
-    if ~exist('K','var') || isempty(K) 
-       K = ps.K; 
+    if ~exist('K','var') || isempty(K)
+       K = ps.K;
     end
     if ~exist('verbose','var')
-       verbose = false; 
+       verbose = false;
     end
     if ~exist('include_mcmc','var')
-       include_mcmc = true; 
+       include_mcmc = true;
     end
     if ~exist('fast_mode','var')
        fast_mode = false;
     end
-    
+
     load(ps.libname,'lib');
     lib.ncpt;
-    
+
     % generate parses
     initMP = generate_random_parses(I,lib,K,verbose);
     nl = numel(initMP);
     init_scores = zeros(nl,1);
     for i=1:nl
         init_scores(i) = scoreMP_NoRel(initMP{i},lib);
-    end      
-    
+    end
+
     % visualize initial parses
     if verbose
-        sz = [500 500]; % figure size      
+        sz = [500 500]; % figure size
         h = figure;
         set(h,'visible','off')
         pos = get(h,'Position');
         pos(3:4) = sz;
         set(h,'Position',pos);
         nrow = ceil(sqrt(nl));
-        
+
         for i=1:nl
-          
-            
+
+
             subplot(nrow,nrow,i);
             vizMP(initMP{i},'motor');
-            
+
             lb = num2str(init_scores(i),4);
             if i==1, lb = ['initial score: ' lb]; end
             title(lb);
@@ -71,26 +71,27 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
         dir_n = strcat(pa,'pa_',int2str(i),'/')
         mkdir(dir_n)
         fprintf(1,'\nOptimizing parse %d of %d\n',i,nl);
-        finalMP{i} = SearchForParse(initMP{i},lib,verbose,fast_mode,dir_n);
+        % finalMP{i} = SearchForParse(initMP{i},lib,verbose,fast_mode,dir_n);
+        finalMP{i} = SearchForParseModeHopping(initMP{i},lib,verbose,fast_mode,dir_n);
     end
     final_scores = zeros(nl,1);
     for i=1:nl
-       final_scores(i) = scoreMP(finalMP{i},lib); 
+       final_scores(i) = scoreMP(finalMP{i},lib);
     end
-    
+
     % sort programs from best to worst
     [~,score_indx] = sort(final_scores,1,'descend');
     finalMP = finalMP(score_indx);
     final_scores = final_scores(score_indx);
-    
+
     % visualize the final parses
     if verbose
-        sz = [500 500]; % figure size      
+        sz = [500 500]; % figure size
         h = figure;
         pos = get(h,'Position');
         pos(3:4) = sz;
         set(h,'Position',pos);
-        nrow = ceil(sqrt(nl));        
+        nrow = ceil(sqrt(nl));
         for i=1:nl
             subplot(nrow,nrow,i);
             vizMP(finalMP{i},'motor');
@@ -102,7 +103,7 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
         saveas(h,strcat(pa,'final_parse.png'))
         drawnow
     end
-        
+
     % MCMC to estimate local variance at the type level
     samples_type = [];
     if include_mcmc
@@ -119,7 +120,7 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
         fprintf(1,'done.\n');
         samples_type = samples_type(:);
     end
-    
+
     % return structure
     G = struct;
     G.models = finalMP;
@@ -127,5 +128,5 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
     G.samples_type = samples_type;
     G.img = I;
     G.PM = ps;
-    
+
 end

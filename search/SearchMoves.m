@@ -5,41 +5,41 @@ classdef SearchMoves < BetterHandle
     % It does not modify the coarse stroke decomposition, besides
     % by optimizing stroke direction and stroke split/merges
     %
-    
+
     properties
         MAX_NS_ALL_PERM = 6; % consider all flips/permutations for characters
             % up to this size (-2 for fast mode)
     end
-    
+
     properties
-        M                
+        M
         searchPM
     end
-    
+
     properties (Dependent)
         lib
         verbose
         fast_mode
     end
-    
+
     methods
-        
+
         function this = SearchMoves(Minit,lib,verbose,fast_mode)
             % constructor
-            % 
+            %
             % Input:
             %  Minit : model to optimize
             %  lib: library
             %  verbose: (true/false) describe proress?
             %  fast_mode: (true/false) if true, do not run gradient-based optimization
-            % 
+            %
             if ~exist('verbose','var')
-               verbose = false; 
+               verbose = false;
             end
             if ~exist('fast_mode','var')
-                fast_mode = false; 
-            end            
-            assert(~Minit.has_relations);
+                fast_mode = false;
+            end
+            %assert(~Minit.has_relations);
             if fast_mode
                 this.MAX_NS_ALL_PERM = this.MAX_NS_ALL_PERM - 2;
             end
@@ -47,21 +47,21 @@ classdef SearchMoves < BetterHandle
             this.searchPM.lib = lib;
             this.searchPM.verbose = verbose;
             this.searchPM.fast_mode = fast_mode;
-            this.searchPM.MAX_NS_ALL_PERM = this.MAX_NS_ALL_PERM;            
+            this.searchPM.MAX_NS_ALL_PERM = this.MAX_NS_ALL_PERM;
         end
-        
+
         function out = get.lib(this)
             out = this.searchPM.lib;
         end
-        
+
         function out = get.verbose(this)
-            out = this.searchPM.verbose; 
+            out = this.searchPM.verbose;
         end
-        
+
         function out = get.fast_mode(this)
-           out = this.searchPM.fast_mode; 
+           out = this.searchPM.fast_mode;
         end
-        
+
         function disp_score(this)
             % display the current model score
             if this.M.has_relations()
@@ -71,30 +71,30 @@ classdef SearchMoves < BetterHandle
             end
             if this.verbose, fprintf(1,' score = %s\n',num2str(score,4)); end
         end
-        
+
         function move_opt_subids(this,list_sid)
            % optimize all of the sub-ids in "list_sid" (default is all 1:M.ns)
            if exist('list_sid','var')
-               optimize_subids(this.searchPM,this.M,list_sid); 
+               optimize_subids(this.searchPM,this.M,list_sid);
            else
-               optimize_subids(this.searchPM,this.M); 
+               optimize_subids(this.searchPM,this.M);
            end
         end
-        
+
         function move_opt_grad(this,list_sid)
            % gradient optimization, for the strokes listed in "list_sid"
            if ~exist('list_sid','var')
-               optimize_grad(this.searchPM,this.M); 
+               optimize_grad(this.searchPM,this.M);
            else
-               optimize_grad(this.searchPM,this.M,list_sid); 
+               optimize_grad(this.searchPM,this.M,list_sid);
            end
         end
-        
+
         function move_opt_order(this)
            % optimize the stroke order
            optimize_order(this.searchPM,this.M);
         end
-        
+
         function bool_flip = move_opt_direction(this,sid)
            % optimize the direction of a stroke
            assert(~this.M.has_relations());
@@ -108,17 +108,17 @@ classdef SearchMoves < BetterHandle
               bool_flip = true;
            end
         end
-        
-        function move_split_merge(this)            
-           % run sub-search that tries split/merge moves 
+
+        function move_split_merge(this)
+           % run sub-search that tries split/merge moves
            if ~this.fast_mode
                 this.M = SearchSplitMerge(this.M,this.lib,this.verbose);
            end
         end
-        
+
         function move_opt_dir_order_rel(this)
             % optimize the direction, order, and relations between strokes
-          
+
             % flip each of the strokes
             if this.verbose, fprintf(1,'  try flipping each stroke direction.\n'); end
             Q_flip = cell(this.M.ns,1);
@@ -126,8 +126,8 @@ classdef SearchMoves < BetterHandle
                Q_flip{sid} = this.M.copy();
                flip_direction(this.searchPM,Q_flip{sid},sid);
             end
-            
-            % try all combinations of flips, 
+
+            % try all combinations of flips,
             % with the optimal stroke order for each
             if this.verbose, fprintf(1,'  find optimal directions/orders.\n'); end
             if this.M.ns <= this.MAX_NS_ALL_PERM
@@ -136,7 +136,7 @@ classdef SearchMoves < BetterHandle
                 bin = rand(2^this.MAX_NS_ALL_PERM,this.M.ns)>.5;
                 bin = unique(bin,'rows');
             end
-            nb = size(bin,1);    
+            nb = size(bin,1);
             scores = zeros(nb,1);
             store_Q = cell(nb,1);
             for i=1:nb
@@ -146,24 +146,55 @@ classdef SearchMoves < BetterHandle
                   if flip(sid) % if we flipped this stroke
                     Q.S{sid} = Q_flip{sid}.S{sid}.copy();
                   end
-               end               
+               end
                optimize_order(this.searchPM,Q);
                optimize_relations(this.searchPM,Q);
                scores(i) = scoreMP(Q,this.lib);
-               store_Q{i} = Q;               
+               store_Q{i} = Q;
             end
-            
+
             % select the best combination of direction flips/stroke order
             [~,windx] = randmax(scores);
             % windx = argmax(scores);
-            this.M = store_Q{windx}.copy();            
+            this.M = store_Q{windx}.copy();
         end
- 
+
+	function move_dir_order_rel(this)
+   		% inspired from move_opt_dir_order_rel(this)
+    		% optimize the direction, order, and relations between strokes
+
+    		% flip one of the strokes
+    		if this.verbose, fprintf(1,'  try flipping one stroke direction.\n'); end
+    		Q_flip = cell(this.M.ns,1);
+    		% chose a random sid
+    		% sid = 1+round(rand(1)*(this.M.ns-1));
+		sid = randi([1 this.M.ns],1,1);
+    		Q_flip{sid} = this.M.copy();
+    		flip_direction_mode_hopping(this.searchPM,Q_flip{sid},sid);
+    		Q = this.M.copy();
+    		Q.S{sid} = Q_flip{sid}.S{sid}.copy();
+    		optimize_order(this.searchPM,Q);
+    		optimize_relations(this.searchPM,Q);
+    		this.M = Q.copy();
+	end
+
     end
-    
-    
-    
+
+
+
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function flip_direction_mode_hopping(searchPM,Q,sid)
+% reverse the direction of a stroke "sid",
+% an optimize various features about that stroke
+    UtilMP.flip_stroke(Q.S{sid});
+    optimize_subids(searchPM,Q,sid);
+    %optimize_grad(searchPM,Q,sid);
+    % Keep this optimize_grad ???
+    optimize_grad(searchPM,Q);
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function base = all_binary_strings(n)
 % Generate all binary sequences of length n
@@ -186,17 +217,17 @@ end
 
 function optimize_grad(searchPM,Q,list_sid)
 % run gradient-based optimization, and return
-% 
+%
     if ~exist('list_sid','var')
-       list_sid = 1:Q.ns; 
+       list_sid = 1:Q.ns;
     end
-    
+
     % run gradient-based optimization
     if ~searchPM.fast_mode
         %scoreF = argmax_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose);
-        scoreF = mcmc_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose);
+        scoreF = mcmc_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose,searchPM);
     end
-    
+
     % Check to make sure the object was properly updated
     if Q.has_relations
         scoreQ = scoreMP(Q,searchPM.lib,'strokes',list_sid,'type',true,'token',true,'image',true);
@@ -208,7 +239,7 @@ function optimize_grad(searchPM,Q,list_sid)
     if ~searchPM.fast_mode
         assert( isinf(scoreF) || aeq(scoreF,scoreQ) );
     end
-    
+
 end
 
 function optimize_order(searchPM,Q)
@@ -217,7 +248,7 @@ function optimize_order(searchPM,Q)
     % not set
 
     if isfield(Q.S{1},'R')
-       error('cannot optimize order after relations are set'); 
+       error('cannot optimize order after relations are set');
     end
 
     % get all the permutations to try
@@ -226,21 +257,21 @@ function optimize_order(searchPM,Q)
         P = perms(1:Q.ns);
     else
         % try a subset of the permutations
-        np = factorial(searchPM.MAX_NS_ALL_PERM); %720        
+        np = factorial(searchPM.MAX_NS_ALL_PERM); %720
         P = zeros(np,Q.ns);
         for i=1:np
             P(i,:) = randperm(Q.ns);
         end
         P = unique(P,'rows');
     end
-        
-    % score all the permutations    
+
+    % score all the permutations
     n = size(P,1);
     scores = zeros(n,1);
     for i=1:n
-       QQ = Q.copy(); 
-       perm = P(i,:);       
-       QQ.S = QQ.S(perm);       
+       QQ = Q.copy();
+       perm = P(i,:);
+       QQ.S = QQ.S(perm);
        scores(i) = optimize_relations(searchPM,QQ);
     end
 
@@ -255,12 +286,12 @@ function optimize_subids(searchPM,Q,list_sid)
     % apply one iteration of coordinate ascent on the
     % sub-stroke ids
     if ~exist('list_sid','var')
-       list_sid = 1:Q.ns; 
+       list_sid = 1:Q.ns;
     end
     for sid=list_sid % each stroke
        if searchPM.verbose, fprintf(1,'   choose subid for stroke %d ',sid); end
        optimize_this_subid(Q,sid,searchPM.lib,searchPM.verbose);
-    end    
+    end
 end
 
 function flip_direction(searchPM,Q,sid)

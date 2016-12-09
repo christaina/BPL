@@ -106,3 +106,92 @@ function minscore = myscore_NoRel(theta,M,lib,list_sid,all_R)
     ll = scoreMP(Q,lib,'strokes',list_sid,'type',true,'token',true,'stat',false,'image',true); 
     minscore = -ll;
 end
+
+function mh_flip_token(M,lib,list_sid,searchPM)
+    fprintf(1,'tryna flip a token');
+    Q = M.copy()
+    curr_score = scoreMP(Q,lib);
+    fprintf(1,'  try flipping one stroke direction.\n');
+    sid = randi([1 this.M.ns],1,1);
+
+    UtilMP.flip_stroke(Q.S{sid});
+    optimize_subids(searchPM,Q,sid);
+
+    prop_score = scoreMP(Q,lib);
+    accept = mh_accept(prop_score,curr_score);
+    if accept
+        fprintf(1,' flip accepted');
+                % need to make sure this is legit
+                M = Q.copy();
+    else
+        fprintf(1,' flip rejected');
+    end
+end
+
+function mh_relation_token(M,searchPM)
+    llvec = argmax_relations(searchPM.lib,M);
+    ll = sum(llvec);
+end
+
+function mh_order_token(M,searchPM)
+    optimize_order(searchPM,M)
+end
+
+function mh_split_merge_token()
+        fprintf(1,' trying a split merge');
+            % score current M
+            curr_score = scoreMP(M,lib);
+            % make a split or merge
+            Q = M.copy();
+            Q = SearchSplitMerge(Q,lib,verbose);
+            % score new M
+            prop_score = scoreMP(Q,lib);
+
+            %% accept or reject
+            accept = mh_accept(prop_score,curr_score);
+            if accept
+        fprintf(1,' split merge accepted');
+                M = Q.copy();
+        else
+        fprintf(1,'split merge rejected');
+            end
+end
+
+function optimize_order(searchPM,Q)
+    % optimize the stroke order, where we implicitly maximize
+    % over relations. But the function returns a Q where the relations are
+    % not set
+
+    if isfield(Q.S{1},'R')
+       error('cannot optimize order after relations are set');
+    end
+
+    % get all the permutations to try
+    if Q.ns <= searchPM.MAX_NS_ALL_PERM
+        % try all possible combinations
+        P = perms(1:Q.ns);
+    else
+        % try a subset of the permutations
+        np = factorial(searchPM.MAX_NS_ALL_PERM); %720
+        P = zeros(np,Q.ns);
+        for i=1:np
+            P(i,:) = randperm(Q.ns);
+        end
+        P = unique(P,'rows');
+    end
+
+    % score all the permutations
+    n = size(P,1);
+    scores = zeros(n,1);
+    for i=1:n
+       QQ = Q.copy();
+       perm = P(i,:);
+       QQ.S = QQ.S(perm);
+       scores(i) = optimize_relations(searchPM,QQ);
+    end
+
+    % pick the best order, and return Q without instantiating relations
+    [~,windx] = randmax(scores);
+    perm = P(windx,:);
+    Q.S = Q.S(perm);
+end

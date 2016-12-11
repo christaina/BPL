@@ -81,13 +81,13 @@ classdef SearchMoves < BetterHandle
            end
         end
         
-        function move_opt_grad(this,list_sid)
+        function move_opt_grad(this,dir)
            % gradient optimization, for the strokes listed in "list_sid"
-           if ~exist('list_sid','var')
-               optimize_grad(this.searchPM,this.M); 
-           else
-               optimize_grad(this.searchPM,this.M,list_sid); 
-           end
+           %if ~exist('list_sid','var')
+               optimize_grad(this.searchPM,this.M,dir); 
+           %else
+           %    optimize_grad(this.searchPM,this.M,list_sid,dir); 
+           %end
         end
         
         function move_opt_order(this)
@@ -184,7 +184,7 @@ function ll = optimize_relations(searchPM,Q)
     ll = sum(llvec);
 end
 
-function optimize_grad(searchPM,Q,list_sid)
+function optimize_grad(searchPM,Q,dir,list_sid)
 % run gradient-based optimization, and return
 % 
     if ~exist('list_sid','var')
@@ -194,7 +194,7 @@ function optimize_grad(searchPM,Q,list_sid)
     % run gradient-based optimization
     if ~searchPM.fast_mode
         %scoreF = argmax_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose);
-        scoreF = mcmc_fit_type(Q,searchPM.lib,list_sid,searchPM.verbose);
+        scoreF = mcmc_fit_type(Q,list_sid,searchPM,dir);
     end
     
     % Check to make sure the object was properly updated

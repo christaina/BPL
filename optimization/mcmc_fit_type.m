@@ -1,4 +1,4 @@
-function [scoreF,score0] = mcmc_fit_type(Minit,lib,list_sid,verbose)
+function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
 % ARGMAX_FIT_TYPE... Fit a parse to an image, with type-level parameters
 % only
 %
@@ -13,9 +13,11 @@ function [scoreF,score0] = mcmc_fit_type(Minit,lib,list_sid,verbose)
 %  score0 : initial score
 % 
 
+    lib = searchPM.lib;
+    verbose = searchPM.verbose;
     ps = defaultps;
     nsamp = ps.mcmc.nsamp_type_chain;
-    ncpt = lib.ncpt;
+    nsamp = 300;
 
     if ~exist('list_sid','var')
        list_sid = 1:M.ns; 
@@ -44,42 +46,81 @@ function [scoreF,score0] = mcmc_fit_type(Minit,lib,list_sid,verbose)
         fprintf(1,'\neither no mid relations or all have eval spots\n');
     else
         fprintf(1,'\nsome mid relations dont have eval spots\n');
-        for sid=list_sid
-            if strcmp(M.S{sid}.R.type,'mid')
-                if isempty(M.S{sid}.R.eval_spot_type)
-                    [~,lb,ub]=bspline_gen_s(ncpt,1);
-                    M.S{sid}.R.eval_spot_type=lb + rand * (ub-lb);
-                end
-            end
-        end
+        add_eval_spots(M,list_sid,lib);
+    end
+    now_has = M.has_eval_types(list_sid);
+    if now_has
+        fprintf(1,' now has spots');
     end
 
     % initial score
     score0 = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
 
     % run MCMC chain for tokens
+
     for is = 1:nsamp
-        mcmc_iter_token(MH,M,lib,list_sid);
-        samples{is} = M.copy();
+        u_1 = rand;
+        P_check_1 = 0.1;
+        u_2 = rand;
+        P_check_2 = 0.5;
+        now_has = M.has_eval_types(list_sid);
+        if ~(now_has)
+            fprintf(1,' now missing spots');
+            add_eval_spots(M,list_sid,lib)
+        end
+        if u_1 > P_check_1
+            %check_shapestype(M,list_sid);
+            mcmc_iter_token(MH,M,lib,list_sid);
+        else 
+            if u_2 > 0.7
+                move_relations(M,searchPM);
+            elseif (u_2 > 0.5)
+                move_flip_all_token(M,lib,list_sid,searchPM);
+            elseif (u_2 > 0.3)
+                move_order_token(M,searchPM);
+            else
+                move_split_merge_token(M,searchPM);
+            end
+        end
         curr_score = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
         samples_score(is) = curr_score;
         assert(~isinf(samples_score(is)));
+        samples{is} = M.copy();
     end
     
     [maxscore,idx] = max(samples_score);
     best_M = samples{idx};
     final_score = scoreMP(best_M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+    assert(final_score==maxscore);
+    fprintf(1,strcat('\nbest sample found at idx ',num2str(idx)));
     fprintf(1,'\nmax score %d',maxscore);
     fprintf(1,'\nmax score 2 %d',final_score);
     thetaF = model_to_vec_fit_type(best_M,list_sid);
+    %Minit = best_M.copy();
     refill(thetaF,Minit,list_sid);
-    if ~has_relations
-        scoreF = scoreMP_NoRel(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
-    else
-        scoreF = scoreMP(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+    for is=list_sid
+        Minit.S{is}.R = best_M.S{is}.R; 
+        Minit.S{is}.shapes_type = best_M.S{is}.shapes_type;
     end
+    
+    vizSamples(samples,samples_score,nsamp,dir)
+    %if ~has_relations
+    %    scoreF = scoreMP_NoRel(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+    %else
+        scoreF = scoreMP(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+    %end
 
-    assert(Minit.has_relations==has_relations);
+    %assert(Minit.has_relations==has_relations);
+
+end
+
+function check_rel(M,list_sid,lib)
+    has_relations = M.has_relations(list_sid);
+    if (has_relations)
+        fprintf(1,'\n checking for relations and found ')
+    else
+    fprintf(1,' checking for relations and not found ')
+    end
 
 end
 
@@ -107,12 +148,65 @@ function minscore = myscore_NoRel(theta,M,lib,list_sid,all_R)
     minscore = -ll;
 end
 
-function mh_flip_token(M,lib,list_sid,searchPM)
+function base = all_binary_strings(n)
+% Generate all binary sequences of length n
+% base is matrix, where rows are sequences
+   base = [true; false];
+   for i=2:n
+      [nb,ncol] = size(base);
+      base = [true(nb,1) base; false(nb,1) base];
+   end
+end
+
+function move_flip_all_token(M,lib,list_sid,searchPM)
+      if searchPM.verbose, fprintf(1,'  try flipping each stroke direction.\n'); end
+            Q_flip = cell(M.ns,1);
+            for sid=1:M.ns
+               Q_flip{sid} = M.copy();
+               UtilMP.flip_stroke(Q_flip{sid}.S{sid});
+               optimize_subids(searchPM,Q_flip{sid},sid);
+               %flip_direction(searchPM,Q_flip{sid},sid);
+            end
+
+            % try all combinations of flips, 
+            % with the optimal stroke order for each
+            if searchPM.verbose, fprintf(1,'  find optimal directions/orders.\n'); end
+            MAX_NS_ALL_PERM = 6;
+            if M.ns <= MAX_NS_ALL_PERM
+                bin = all_binary_strings(M.ns);
+            else
+                bin = rand(2^MAX_NS_ALL_PERM,M.ns)>.5;
+                bin = unique(bin,'rows');
+            end
+            nb = size(bin,1);
+            scores = zeros(nb,1);
+            store_Q = cell(nb,1);
+            for i=1:nb
+               flip = bin(i,:);
+               Q = M.copy();
+               for sid=1:M.ns
+                  if flip(sid) % if we flipped this stroke
+                    Q.S{sid} = Q_flip{sid}.S{sid}.copy();
+                  end
+               end
+               %optimize_order(searchPM,Q);
+               %optimize_relations(searchPM,Q);
+               scores(i) = scoreMP(Q,searchPM.lib);
+               store_Q{i} = Q;
+            end
+
+            % select the best combination of direction flips/stroke order
+            [~,windx] = randmax(scores);
+            % windx = argmax(scores);
+            M = store_Q{windx}.copy();
+end
+
+function move_flip_token(M,lib,list_sid,searchPM)
     fprintf(1,'tryna flip a token');
     Q = M.copy()
     curr_score = scoreMP(Q,lib);
     fprintf(1,'  try flipping one stroke direction.\n');
-    sid = randi([1 this.M.ns],1,1);
+    sid = randi([1 M.ns],1,1);
 
     UtilMP.flip_stroke(Q.S{sid});
     optimize_subids(searchPM,Q,sid);
@@ -128,33 +222,63 @@ function mh_flip_token(M,lib,list_sid,searchPM)
     end
 end
 
-function mh_relation_token(M,searchPM)
+function optimize_subids(searchPM,M,list_sid)
+    % for all strokes in list_sid (default is all of them),
+    % apply one iteration of coordinate ascent on the
+    % sub-stroke ids
+    if ~exist('list_sid','var')
+       list_sid = 1:M.ns;
+    end
+    Q = M.copy();
+    curr_score = scoreMP(Q,searchPM.lib);
+    fprintf(1,'  try optimizing the substroke-ids one stroke direction.\n');
+    sid = randi([1 M.ns],1,1);
+    for sid=list_sid % each stroke
+       if searchPM.verbose, fprintf(1,'   choose subid for stroke %d ',sid); end
+       optimize_this_subid(Q,sid,searchPM.lib,searchPM.verbose);
+    end
+    prop_score = scoreMP(Q,searchPM.lib);
+    accept = mh_accept(prop_score,curr_score);
+    if accept
+        fprintf(1,'substroke optimization accepted');
+                % need to make sure this is legit
+        M = Q.copy();
+    else
+        fprintf(1,'substroke opti rejected');
+    end
+end
+
+function move_relations(M,searchPM)
+    % optimizing some relations
     llvec = argmax_relations(searchPM.lib,M);
     ll = sum(llvec);
 end
 
-function mh_order_token(M,searchPM)
+function move_order_token(M,searchPM)
+    % also handles subids
     optimize_order(searchPM,M)
+    optimize_subids(searchPM,M)
 end
 
-function mh_split_merge_token()
+function move_split_merge_token(M,searchPM)
         fprintf(1,' trying a split merge');
             % score current M
-            curr_score = scoreMP(M,lib);
+            curr_score = scoreMP(M,searchPM.lib);
             % make a split or merge
             Q = M.copy();
-            Q = SearchSplitMerge(Q,lib,verbose);
+            % handles optimizing subids
+            Q = SearchSplitMerge(Q,searchPM.lib,searchPM.verbose);
             % score new M
-            prop_score = scoreMP(Q,lib);
+            prop_score = scoreMP(Q,searchPM.lib);
 
             %% accept or reject
             accept = mh_accept(prop_score,curr_score);
-            if accept
+        if accept
         fprintf(1,' split merge accepted');
                 M = Q.copy();
         else
         fprintf(1,'split merge rejected');
-            end
+        end
 end
 
 function optimize_order(searchPM,Q)
@@ -187,6 +311,7 @@ function optimize_order(searchPM,Q)
        QQ = Q.copy();
        perm = P(i,:);
        QQ.S = QQ.S(perm);
+       %scores(i) = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
        scores(i) = optimize_relations(searchPM,QQ);
     end
 
@@ -194,4 +319,58 @@ function optimize_order(searchPM,Q)
     [~,windx] = randmax(scores);
     perm = P(windx,:);
     Q.S = Q.S(perm);
+end
+
+function ll = optimize_relations(searchPM,Q)
+% plug in the optimal relations between the strokes
+%
+% ll : best log-likelihood during relation search, which includes
+%      all CPDs that directly depend on the relations
+    llvec = argmax_relations(searchPM.lib,Q);
+    ll = sum(llvec);
+end
+
+function add_eval_spots(M,list_sid,lib)
+    ncpt = lib.ncpt;
+    for sid=list_sid
+        if strcmp(M.S{sid}.R.type,'mid')
+            if isempty(M.S{sid}.R.eval_spot_type)
+                [~,lb,ub]=bspline_gen_s(ncpt,1);
+                M.S{sid}.R.eval_spot_type=lb + rand * (ub-lb);
+            end
+        end
+    end
+end
+
+function check_shapestype(M,list_sid)
+    for i=list_sid
+        if isempty(M.S{i}.shapes_token)
+            fprintf(1,'\n shapes token is empty \n')
+        else
+            fprintf(1,'\n shapes token is not empty \n')
+        end
+        if isempty(M.S{i}.shapes_type)
+            fprintf(1,'\n shapes type is empty \n')
+        else
+            fprintf(1,'\n shapes type is not empty \n')
+        end
+    end
+end
+
+function accept = mh_accept(prop_score,curr_score,g_curr_to_prop,g_prop_to_curr)
+    if exist('g_curr_to_prop','var')
+        lr = prop_score - curr_score + g_prop_to_curr - g_curr_to_prop;
+    else
+        lr = prop_score - curr_score;
+    end
+    fprintf(1,strcat('\nscore diff: ',num2str(lr)));
+
+    if isinf(prop_score)
+       accept = false;
+       return
+    end
+
+    r = min(1,exp(lr));
+    assert(~isinf(curr_score));
+    accept = rand <= r;
 end

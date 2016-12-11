@@ -62,7 +62,7 @@ function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
         end
         pause(0.1);
         saveas(h,strcat(pa,'init_parse_full.png'));
-        drawnow
+        %drawnow
     end
 
     % run search for each candidate

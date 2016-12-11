@@ -11,6 +11,7 @@ function plot_motor_to_image(I,drawing,size_start,lw)
     if ~exist('size_start','var') || isempty(size_start) 
        size_start = 18;
     end
+    size_start = 18;
     bool_start = size_start > 0;
     if ~exist('lw','var') || isempty(lw)
        lw = 4; % line width 

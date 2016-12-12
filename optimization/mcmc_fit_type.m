@@ -14,7 +14,7 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
 % 
 
     lib = searchPM.lib;
-    verbose = searchPM.verbose;
+    verbose = false;
     ps = defaultps;
     nsamp = ps.mcmc.nsamp_type_chain;
     nsamp = 300;
@@ -35,23 +35,17 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
 
     % add relations if they are missing
     if ~has_relations
-        fprintf(1,'no relations found')
+        fprintf(1,'\nno relations found')
         all_R = cache_enum_all_relations(lib,M);
         argmax_relations(lib,M,all_R,list_sid);
     end
 
     % add R.eval_spot_type if it is missing from relations --> needed for MCMC
     has_spots = M.has_eval_types(list_sid);
-    if has_spots
-        fprintf(1,'\neither no mid relations or all have eval spots\n');
-    else
-        fprintf(1,'\nsome mid relations dont have eval spots\n');
+    if ~(has_spots)
         add_eval_spots(M,list_sid,lib);
     end
     now_has = M.has_eval_types(list_sid);
-    if now_has
-        fprintf(1,' now has spots');
-    end
 
     % initial score
     score0 = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
@@ -60,21 +54,21 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
 
     for is = 1:nsamp
         u_1 = rand;
-        P_check_1 = 0.1;
+        P_check_1 = 0.8;
         u_2 = rand;
         P_check_2 = 0.5;
         now_has = M.has_eval_types(list_sid);
         if ~(now_has)
-            fprintf(1,' now missing spots');
+            %fprintf(1,'\n now missing spots');
             add_eval_spots(M,list_sid,lib)
         end
         if u_1 > P_check_1
             %check_shapestype(M,list_sid);
             mcmc_iter_token(MH,M,lib,list_sid);
         else 
-            if u_2 > 0.7
+            if u_2 > 0.9
                 move_relations(M,searchPM);
-            elseif (u_2 > 0.5)
+            elseif (u_2 > 0.6)
                 move_flip_all_token(M,lib,list_sid,searchPM);
             elseif (u_2 > 0.3)
                 move_order_token(M,searchPM);
@@ -83,6 +77,7 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
             end
         end
         curr_score = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+        fprintf(1,strcat('\ni:',num2str(is),', current ll: ',num2str(curr_score)))
         samples_score(is) = curr_score;
         assert(~isinf(samples_score(is)));
         samples{is} = M.copy();
@@ -92,9 +87,8 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
     best_M = samples{idx};
     final_score = scoreMP(best_M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
     assert(final_score==maxscore);
-    fprintf(1,strcat('\nbest sample found at idx ',num2str(idx)));
+    fprintf(1,strcat('\nbest sample found at idx  ',num2str(idx)));
     fprintf(1,'\nmax score %d',maxscore);
-    fprintf(1,'\nmax score 2 %d',final_score);
     thetaF = model_to_vec_fit_type(best_M,list_sid);
     %Minit = best_M.copy();
     refill(thetaF,Minit,list_sid);
@@ -119,7 +113,7 @@ function check_rel(M,list_sid,lib)
     if (has_relations)
         fprintf(1,'\n checking for relations and found ')
     else
-    fprintf(1,' checking for relations and not found ')
+    fprintf(1,'\n checking for relations and not found ')
     end
 
 end
@@ -159,7 +153,7 @@ function base = all_binary_strings(n)
 end
 
 function move_flip_all_token(M,lib,list_sid,searchPM)
-      if searchPM.verbose, fprintf(1,'  try flipping each stroke direction.\n'); end
+      if searchPM.verbose, fprintf(1,'\n move:flip stroke dirs'); end
             Q_flip = cell(M.ns,1);
             for sid=1:M.ns
                Q_flip{sid} = M.copy();
@@ -170,7 +164,7 @@ function move_flip_all_token(M,lib,list_sid,searchPM)
 
             % try all combinations of flips, 
             % with the optimal stroke order for each
-            if searchPM.verbose, fprintf(1,'  find optimal directions/orders.\n'); end
+            %if searchPM.verbose, fprintf(1,'\n find optimal directions/orders.'); end
             MAX_NS_ALL_PERM = 6;
             if M.ns <= MAX_NS_ALL_PERM
                 bin = all_binary_strings(M.ns);
@@ -198,28 +192,10 @@ function move_flip_all_token(M,lib,list_sid,searchPM)
             % select the best combination of direction flips/stroke order
             [~,windx] = randmax(scores);
             % windx = argmax(scores);
-            M = store_Q{windx}.copy();
-end
-
-function move_flip_token(M,lib,list_sid,searchPM)
-    fprintf(1,'tryna flip a token');
-    Q = M.copy()
-    curr_score = scoreMP(Q,lib);
-    fprintf(1,'  try flipping one stroke direction.\n');
-    sid = randi([1 M.ns],1,1);
-
-    UtilMP.flip_stroke(Q.S{sid});
-    optimize_subids(searchPM,Q,sid);
-
-    prop_score = scoreMP(Q,lib);
-    accept = mh_accept(prop_score,curr_score);
-    if accept
-        fprintf(1,' flip accepted');
-                % need to make sure this is legit
-                M = Q.copy();
-    else
-        fprintf(1,' flip rejected');
-    end
+            for i=1:M.ns
+                M.S{i}=store_Q{windx}.S{i};
+            end
+            %M = store_Q{windx}.copy();
 end
 
 function optimize_subids(searchPM,M,list_sid)
@@ -231,37 +207,35 @@ function optimize_subids(searchPM,M,list_sid)
     end
     Q = M.copy();
     curr_score = scoreMP(Q,searchPM.lib);
-    fprintf(1,'  try optimizing the substroke-ids one stroke direction.\n');
+    fprintf(1,' (optimizing SS id) ');
     sid = randi([1 M.ns],1,1);
     for sid=list_sid % each stroke
-       if searchPM.verbose, fprintf(1,'   choose subid for stroke %d ',sid); end
+       %if searchPM.verbose, fprintf(1,'\nchoose subid for stroke %d ',sid); end
        optimize_this_subid(Q,sid,searchPM.lib,searchPM.verbose);
     end
     prop_score = scoreMP(Q,searchPM.lib);
-    accept = mh_accept(prop_score,curr_score);
-    if accept
-        fprintf(1,'substroke optimization accepted');
-                % need to make sure this is legit
-        M = Q.copy();
-    else
-        fprintf(1,'substroke opti rejected');
+    for i=1:M.ns
+        M.S{i} = Q.S{i};
     end
+    %M = Q.copy();
 end
 
 function move_relations(M,searchPM)
     % optimizing some relations
     llvec = argmax_relations(searchPM.lib,M);
     ll = sum(llvec);
+    fprintf(1,'move: optimize relations')
 end
 
 function move_order_token(M,searchPM)
     % also handles subids
+    fprintf(1,'move: optimize order')
     optimize_order(searchPM,M)
     optimize_subids(searchPM,M)
 end
 
 function move_split_merge_token(M,searchPM)
-        fprintf(1,' trying a split merge');
+        fprintf(1,' \nmove: split merge');
             % score current M
             curr_score = scoreMP(M,searchPM.lib);
             % make a split or merge
@@ -274,10 +248,9 @@ function move_split_merge_token(M,searchPM)
             %% accept or reject
             accept = mh_accept(prop_score,curr_score);
         if accept
-        fprintf(1,' split merge accepted');
                 M = Q.copy();
         else
-        fprintf(1,'split merge rejected');
+        fprintf(1,'\nsplit merge rejected');
         end
 end
 
@@ -344,15 +317,8 @@ end
 
 function check_shapestype(M,list_sid)
     for i=list_sid
-        if isempty(M.S{i}.shapes_token)
-            fprintf(1,'\n shapes token is empty \n')
-        else
-            fprintf(1,'\n shapes token is not empty \n')
-        end
         if isempty(M.S{i}.shapes_type)
-            fprintf(1,'\n shapes type is empty \n')
-        else
-            fprintf(1,'\n shapes type is not empty \n')
+            M.S{i}.shapes_type = M.S{i}.shapes_token;
         end
     end
 end
@@ -363,6 +329,8 @@ function accept = mh_accept(prop_score,curr_score,g_curr_to_prop,g_prop_to_curr)
     else
         lr = prop_score - curr_score;
     end
+    fprintf(1,strcat('\noriginal score: ',num2str(curr_score)));
+    fprintf(1,strcat('\nprop score: ',num2str(prop_score)));
     fprintf(1,strcat('\nscore diff: ',num2str(lr)));
 
     if isinf(prop_score)

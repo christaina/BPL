@@ -5,7 +5,7 @@ function vizSamples(samples,samples_score,nsamp,dir)
     set(h,'visible','off')
     %sz = [500, 500]; % figure size
     sz = 1500;
-    rez = 4000;
+    rez = 1080;
     %set(h,'units','pixel');
     %set(h,'position',[0,0,sz,sz]);
     %set(h,'papersize',[sz,sz]);

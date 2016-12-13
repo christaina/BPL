@@ -23,9 +23,9 @@ function M = SearchForParse(M,lib,verbose,fast_mode,dir)
     pos = get(h,'Position');
     pos(3:4) = sz;
     set(h,'Position',pos);
-    nrow = 3;
+    nrow = 2;
     
-    subplot(nrow,1,1);
+    subplot(nrow,nrow,1);
     vizMP(M,'motor')
     title(strcat('original:',num2str(scoreMP_NoRel(M,lib))));
     %title(strcat('original:',num2str(scoreMP(M,lib))));
@@ -34,7 +34,7 @@ function M = SearchForParse(M,lib,verbose,fast_mode,dir)
     Do = SearchMoves(M,lib,verbose,fast_mode);   
     Do.disp_score();
 
-    subplot(nrow,1,2);
+    subplot(nrow,nrow,2);
     vizMP(M,'motor')
     title(strcat('relations:',num2str(scoreMP_NoRel(M,lib))));
     
@@ -43,7 +43,7 @@ function M = SearchForParse(M,lib,verbose,fast_mode,dir)
     Do.move_opt_grad(dir);    
     
     
-    subplot(nrow,1,3);
+    subplot(nrow,nrow,3);
     vizMP(Do.M,'motor');
     title(strcat('MCMC:',num2str(scoreMP(Do.M,lib))));
     

@@ -12,7 +12,7 @@
 % Output
 %   G: structure to store output
 function G = fit_motorprograms(I,K,verbose,include_mcmc,fast_mode)
-    pa = '../bpl-figs/'
+    pa = '../../bpl-figs/'
 
     ps = defaultps;
     if ~exist('K','var') || isempty(K) 

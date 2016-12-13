@@ -11,5 +11,9 @@ if fast_mode
     warning_mode('Fast mode is for demo purposes only and was not used in paper results.');
 end
 
-load('cross_img','img');
+%load('cross_img','img');
+%load('I_img','img');
+%load('L_img','img');
+load('Phi_img','img');
+
 G = fit_motorprograms(img,K,verbose,include_mcmc,fast_mode);

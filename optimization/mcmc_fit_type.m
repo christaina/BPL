@@ -56,7 +56,6 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
         u_1 = rand;
         P_check_1 = 0.1;
         u_2 = rand;
-        P_check_2 = 0.5;
         now_has = M.has_eval_types(list_sid);
         if ~(now_has)
             %fprintf(1,'\n now missing spots');
@@ -102,7 +101,7 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
     %if ~has_relations
     %    scoreF = scoreMP_NoRel(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
     %else
-        scoreF = scoreMP(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+    scoreF = scoreMP(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
     %end
 
     %assert(Minit.has_relations==has_relations);
@@ -165,7 +164,7 @@ end
 
 function move_flip_all_token(M,lib,list_sid,searchPM)
       if searchPM.verbose, fprintf(1,'\n move:flip stroke dirs'); end
-            curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
+            curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',false);
             Q_flip = cell(M.ns,1);
             for sid=1:M.ns
                Q_flip{sid} = M.copy();
@@ -197,7 +196,7 @@ function move_flip_all_token(M,lib,list_sid,searchPM)
                end
                %optimize_order(searchPM,Q);
                optimize_relations(searchPM,Q);
-               scores(i) = scoreMP(Q,searchPM.lib);
+               scores(i) = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
                store_Q{i} = Q;
             end
 
@@ -208,7 +207,7 @@ function move_flip_all_token(M,lib,list_sid,searchPM)
             for i=1:QQ.ns
                 QQ.S{i}=store_Q{windx}.S{i};
             end
-            prop_score = scoreMP(QQ,searchPM.lib,'strokes',1:QQ.ns,'type',true,'token',true,'image',true);
+            prop_score = scoreMP(QQ,searchPM.lib,'strokes',1:QQ.ns,'type',true,'token',true,'image',false);
 
             %% accept or reject
             accept = mh_accept(prop_score,curr_score);
@@ -230,14 +229,12 @@ function optimize_subids(searchPM,M,list_sid)
        list_sid = 1:M.ns;
     end
     Q = M.copy();
-    prop_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
     fprintf(1,' (optimizing SS id) ');
     sid = randi([1 M.ns],1,1);
     for sid=list_sid % each stroke
        %if searchPM.verbose, fprintf(1,'\nchoose subid for stroke %d ',sid); end
        optimize_this_subid(Q,sid,searchPM.lib,searchPM.verbose);
     end
-    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
     for i=1:M.ns
         M.S{i} = Q.S{i};
     end
@@ -246,12 +243,12 @@ end
 
 function move_relations(M,searchPM)
     Q = M.copy();
-    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
     % optimizing some relations
-    llvec = argmax_relations(searchPM.lib,M);
+    llvec = argmax_relations(searchPM.lib,Q);
     ll = sum(llvec);
-    fprintf(1,'move: optimize relations')
-    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+    fprintf(1,'move: optimize relations');
+    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
     accept = mh_accept(prop_score,curr_score);
     if accept
         %M = Q.copy();
@@ -263,13 +260,13 @@ end
 
 function move_order_token(M,searchPM)
     % also handles subids
-    fprintf(1,'\nmove: optimize order')
+    fprintf(1,'\nmove: optimize order');
     Q = M.copy();
-    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
-    optimize_order(searchPM,Q)
-    optimize_subids(searchPM,Q)
-    fprintf(1,strcat(' current aft opt ll: ',num2str(curr_score)))
-    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
+    optimize_order(searchPM,Q);
+    optimize_subids(searchPM,Q);
+    fprintf(1,strcat(' current aft opt ll: ',num2str(curr_score)));
+    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
 
     %% accept or reject
     accept = mh_accept(prop_score,curr_score);
@@ -284,13 +281,13 @@ end
 function move_split_merge_token(M,searchPM)
         fprintf(1,' \nmove: split merge');
             % score current M
-            curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
+            curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',false);
             % make a split or merge
             Q = M.copy();
             % handles optimizing subids
             Q = SearchSplitMerge(Q,searchPM.lib,searchPM.verbose);
             % score new M
-            prop_score = scoreMP(Q,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
+            prop_score = scoreMP(Q,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',false);
 
             %% accept or reject
             accept = mh_accept(prop_score,curr_score);
@@ -307,7 +304,7 @@ function optimize_order(searchPM,M)
     % optimize the stroke order, where we implicitly maximize
     % over relations. But the function returns a Q where the relations are
     % not set
-    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
 
     if isfield(Q.S{1},'R')
        error('cannot optimize order after relations are set');
@@ -334,7 +331,7 @@ function optimize_order(searchPM,M)
        QQ = Q.copy();
        perm = P(i,:);
        QQ.S = QQ.S(perm);
-       %scores(i) = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+       %scores(i) = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',false);
        scores(i) = optimize_relations(searchPM,QQ);
     end
 
@@ -342,7 +339,7 @@ function optimize_order(searchPM,M)
     [~,windx] = randmax(scores);
     perm = P(windx,:);
     Q.S = Q.S(perm);
-    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
     accept = mh_accept(prop_score,curr_score);
     if accept
         M.S = Q.S(perm);

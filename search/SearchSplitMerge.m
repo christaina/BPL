@@ -87,8 +87,8 @@ function Q = opt_propose_split(M,sid,bid_start_of_second,lib)
     Q.S =[Q.S(1:sid-1); {S1}; {S2}; Q.S(sid+1:end)];
     
     % clear and optimize relations
-%    Q.clear_relations();    
-%    argmax_relations(lib,Q);
+    Q.clear_relations();    
+    argmax_relations(lib,Q);
     
     % optimize the sub-strokes
     optimize_this_subid(Q,sid,lib);

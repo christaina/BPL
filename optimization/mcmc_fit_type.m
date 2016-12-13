@@ -165,6 +165,7 @@ end
 
 function move_flip_all_token(M,lib,list_sid,searchPM)
       if searchPM.verbose, fprintf(1,'\n move:flip stroke dirs'); end
+            curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
             Q_flip = cell(M.ns,1);
             for sid=1:M.ns
                Q_flip{sid} = M.copy();
@@ -203,8 +204,20 @@ function move_flip_all_token(M,lib,list_sid,searchPM)
             % select the best combination of direction flips/stroke order
             [~,windx] = randmax(scores);
             % windx = argmax(scores);
-            for i=1:M.ns
-                M.S{i}=store_Q{windx}.S{i};
+            QQ = M.copy();
+            for i=1:QQ.ns
+                QQ.S{i}=store_Q{windx}.S{i};
+            end
+            prop_score = scoreMP(QQ,searchPM.lib,'strokes',1:QQ.ns,'type',true,'token',true,'image',true);
+
+            %% accept or reject
+            accept = mh_accept(prop_score,curr_score);
+            if accept
+                for i=1:M.ns
+                    M.S{i}=store_Q{windx}.S{i};
+                end
+            else
+                fprintf(1,'\norder move rejected');
             end
             %M = store_Q{windx}.copy();
 end
@@ -232,19 +245,40 @@ function optimize_subids(searchPM,M,list_sid)
 end
 
 function move_relations(M,searchPM)
+    Q = M.copy();
+    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
     % optimizing some relations
     llvec = argmax_relations(searchPM.lib,M);
     ll = sum(llvec);
     fprintf(1,'move: optimize relations')
+    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+    accept = mh_accept(prop_score,curr_score);
+    if accept
+        %M = Q.copy();
+                update_M(M,Q,1:Q.ns);
+    else
+        fprintf(1,'\nrelations move rejected');
+    end
 end
 
 function move_order_token(M,searchPM)
     % also handles subids
     fprintf(1,'\nmove: optimize order')
-    optimize_order(searchPM,M)
-    optimize_subids(searchPM,M)
-    curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
+    Q = M.copy();
+    curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+    optimize_order(searchPM,Q)
+    optimize_subids(searchPM,Q)
     fprintf(1,strcat(' current aft opt ll: ',num2str(curr_score)))
+    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',true);
+
+    %% accept or reject
+    accept = mh_accept(prop_score,curr_score);
+    if accept
+        %M = Q.copy();
+                update_M(M,Q,1:Q.ns);
+    else
+        fprintf(1,'\norder move rejected');
+    end
 end
 
 function move_split_merge_token(M,searchPM)

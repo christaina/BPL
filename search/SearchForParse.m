@@ -34,20 +34,20 @@ function M = SearchForParse(M,lib,verbose,fast_mode,dir)
     Do = SearchMoves(M,lib,verbose,fast_mode);   
     Do.disp_score();
 
-    subplot(nrow,nrow,2);
-    vizMP(M,'motor')
-    title(strcat('relations:',num2str(scoreMP_NoRel(M,lib))));
+    %subplot(nrow,nrow,2);
+    %vizMP(M,'motor')
+    %title(strcat('relations:',num2str(scoreMP_NoRel(M,lib))));
     
     % gradient search
     if verbose, fprintf(1,'Performing MCMC : 1\n'); end
     Do.move_opt_grad(dir);    
     
     
-    subplot(nrow,nrow,3);
+    subplot(nrow,nrow,2);
     vizMP(Do.M,'motor');
     title(strcat('MCMC:',num2str(scoreMP(Do.M,lib))));
     
-    saveas(h,strcat(dir,'opti_moves_test.png'));
+    saveas(h,strcat(dir,'opti_moves_alt.png'));
     close(h)
     
     M = Do.M; 

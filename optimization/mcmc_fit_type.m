@@ -1,4 +1,4 @@
-function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
+function [M,scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
 % ARGMAX_FIT_TYPE... Fit a parse to an image, with type-level parameters
 % only
 %
@@ -69,39 +69,48 @@ function [scoreF,score0] = mcmc_fit_type(Minit,list_sid,searchPM,dir)
             if u_2 > 0.9
                 move_relations(M,searchPM);
             elseif (u_2 > 0.6)
-                move_flip_all_token(M,lib,list_sid,searchPM);
+                M = move_flip_all_token(M,lib,list_sid,searchPM);
             elseif (u_2 > 0.3)
-                move_order_token(M,searchPM);
+                %move_order_token(M,searchPM);
+                M = optimize_order(searchPM,M);
+                
             else
-                move_split_merge_token(M,searchPM);
+                Q = move_split_merge_token(M,searchPM);
+                fprintf(1,strcat('\nnew num strokes moved:',num2str(Q.ns)));
+                M = Q.copy();
+                fprintf(1,strcat('\nnew num strokes moved copy:',num2str(M.ns)));
             end
         end
+        list_sid = 1:M.ns;
         curr_score = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
         fprintf(1,strcat('\ni:',num2str(is),', current ll: ',num2str(curr_score)))
         samples_score(is) = curr_score;
         assert(~isinf(samples_score(is)));
         samples{is} = M.copy();
     end
-    
-    [maxscore,idx] = max(samples_score);
-    best_M = samples{idx};
-    final_score = scoreMP(best_M,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
-    assert(final_score==maxscore);
+    % only choose after burn-in? 
+    burn_in = 100;
+    [maxscore,idx] = max(samples_score(burn_in:nsamp));
     fprintf(1,strcat('\nbest sample found at idx  ',num2str(idx)));
+    best_M = samples{idx+burn_in-1};
+    final_score = scoreMP(best_M,lib,'strokes',1:best_M.ns,'type',true,'token',true,'image',true);
+    assert(final_score==maxscore);
     fprintf(1,'\nmax score %d',maxscore);
     best_M.clear_shapes_type();
-    thetaF = model_to_vec_fit_type(best_M,list_sid);
-    refill(thetaF,Minit,list_sid);
-    for is=list_sid
-        Minit.S{is}.R = best_M.S{is}.R; 
-        Minit.S{is}.shapes_type = best_M.S{is}.shapes_type;
-    end
+    %thetaF = model_to_vec_fit_type(best_M,1:best_M.ns);
+    %refill(thetaF,Minit,list_sid);
+    %Minit.S = best_M.S;
+    M = best_M;
+    %for is=best_M.ns;
+    %    Minit.S{is}.R = best_M.S{is}.R; 
+    %    Minit.S{is}.shapes_type = best_M.S{is}.shapes_type;
+    %end
     
     vizSamples(samples,samples_score,nsamp,dir)
     %if ~has_relations
     %    scoreF = scoreMP_NoRel(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
     %else
-    scoreF = scoreMP(Minit,lib,'strokes',list_sid,'type',true,'token',true,'image',true);
+    scoreF = scoreMP(M,lib,'strokes',1:M.ns,'type',true,'token',true,'image',true);
     %end
 
     %assert(Minit.has_relations==has_relations);
@@ -111,6 +120,7 @@ end
 function update_M(M_old,M_new,list_sid)
     thetaF = model_to_vec_fit_type(M_new,list_sid);
     refill(thetaF,M_old,list_sid);
+    M_old.clear_relations();
     for is=list_sid
         M_old.S{is}.R = M_new.S{is}.R; 
         M_old.S{is}.shapes_type = M_new.S{is}.shapes_type;
@@ -162,12 +172,13 @@ function base = all_binary_strings(n)
    end
 end
 
-function move_flip_all_token(M,lib,list_sid,searchPM)
+function M = move_flip_all_token(M,lib,list_sid,searchPM)
       if searchPM.verbose, fprintf(1,'\n move:flip stroke dirs'); end
             curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',false);
             Q_flip = cell(M.ns,1);
             for sid=1:M.ns
                Q_flip{sid} = M.copy();
+            Q_flip{sid}.clear_shapes_type();
                UtilMP.flip_stroke(Q_flip{sid}.S{sid});
                optimize_subids(searchPM,Q_flip{sid},sid);
                %flip_direction(searchPM,Q_flip{sid},sid);
@@ -263,43 +274,47 @@ function move_order_token(M,searchPM)
     fprintf(1,'\nmove: optimize order');
     Q = M.copy();
     curr_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
-    optimize_order(searchPM,Q);
-    optimize_subids(searchPM,Q);
-    fprintf(1,strcat(' current aft opt ll: ',num2str(curr_score)));
-    prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
+    optimize_order(searchPM,M);
+    %optimize_relations(searchPM,Q);
+    %optimize_subids(searchPM,Q);
+    %fprintf(1,strcat(' current aft opt ll: ',num2str(curr_score)));
+    %prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
 
     %% accept or reject
-    accept = mh_accept(prop_score,curr_score);
-    if accept
+    %accept = mh_accept(prop_score,curr_score);
+    %if accept
         %M = Q.copy();
-                update_M(M,Q,1:Q.ns);
-    else
-        fprintf(1,'\norder move rejected');
-    end
+    %            update_M(M,Q,1:Q.ns);
+    %else
+    %    fprintf(1,'\norder move rejected');
+    %end
 end
 
-function move_split_merge_token(M,searchPM)
+function M = move_split_merge_token(M,searchPM)
         fprintf(1,' \nmove: split merge');
             % score current M
             curr_score = scoreMP(M,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',false);
             % make a split or merge
             Q = M.copy();
+            fprintf(1,strcat('\norig num strokes:',num2str(Q.ns)));
             % handles optimizing subids
             Q = SearchSplitMerge(Q,searchPM.lib,searchPM.verbose);
+            fprintf(1,strcat('\nnew num strokes:',num2str(Q.ns)));
             % score new M
-            prop_score = scoreMP(Q,searchPM.lib,'strokes',1:M.ns,'type',true,'token',true,'image',false);
+            prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
 
             %% accept or reject
             accept = mh_accept(prop_score,curr_score);
         if accept
                 %M = Q.copy();
-                update_M(M,Q,1:Q.ns);
+                %update_M(M,Q,1:Q.ns);
+                M = Q;
         else
         fprintf(1,'\nsplit merge rejected');
         end
 end
 
-function optimize_order(searchPM,M)
+function M = optimize_order(searchPM,M)
     Q = M.copy();
     % optimize the stroke order, where we implicitly maximize
     % over relations. But the function returns a Q where the relations are
@@ -333,16 +348,19 @@ function optimize_order(searchPM,M)
        QQ.S = QQ.S(perm);
        %scores(i) = scoreMP(M,lib,'strokes',list_sid,'type',true,'token',true,'image',false);
        scores(i) = optimize_relations(searchPM,QQ);
+       optimize_subids(searchPM,QQ);
     end
 
     % pick the best order, and return Q without instantiating relations
     [~,windx] = randmax(scores);
     perm = P(windx,:);
     Q.S = Q.S(perm);
+    optimize_relations(searchPM,Q);
+    optimize_subids(searchPM,Q);
     prop_score = scoreMP(Q,searchPM.lib,'strokes',1:Q.ns,'type',true,'token',true,'image',false);
     accept = mh_accept(prop_score,curr_score);
     if accept
-        M.S = Q.S(perm);
+        M = Q.copy();
     else
         fprintf(1,'\n update rejected');
     end
@@ -354,6 +372,7 @@ function ll = optimize_relations(searchPM,Q)
 %
 % ll : best log-likelihood during relation search, which includes
 %      all CPDs that directly depend on the relations
+    Q.clear_relations();
     llvec = argmax_relations(searchPM.lib,Q);
     ll = sum(llvec);
 end

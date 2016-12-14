@@ -27,7 +27,7 @@ function vizSamples(samples,samples_score,nsamp,dir)
         %title(strcat('ll:',num2str(samples_score(samp))));
         vizMP(samples{samp},'motor');
         s = s+1;
-        title(strcat('ll:',num2str(samples_score(samp)),'\n idx:',num2str(samp)));
+        title(strcat('ll:',num2str(samples_score(samp)),';',num2str(samp)));
     end
     print(h,fullfile(dir,'samples_alt.png'),'-dpng',['-r',num2str(rez)],'-opengl')
     %saveas(h,strcat(dir,'many_samples_3.png'));

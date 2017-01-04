@@ -1,3 +1,8 @@
+Using mode-hopping MCMC to infer character strokes. Final project for Inference and Representation at NYU. Based on [Lake, B. M., Salakhutdinov, R., and Tenenbaum, J. B. (2015). Human-level concept learning through probabilistic program induction.](http://www.sciencemag.org/content/350/6266/1332.short) _Science_, 350(6266), 1332-1338.
+
+
+-----------
+
 # BPL model for one-shot learning
 
 Matlab source code for one-shot learning of handwritten characters with Bayesian Program Learning (BPL).
